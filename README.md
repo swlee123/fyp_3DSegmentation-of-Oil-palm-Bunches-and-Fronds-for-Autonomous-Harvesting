@@ -147,6 +147,8 @@ python3 setup.py install
 `ImportError: No module named bz2` 
 fix : https://stackoverflow.com/questions/12806122/missing-python-bz2-module
 
+` 'torch' module not found error` even `torch==1.10.0+cu113` is installed 
+fix : pip install wheel
 
 
 
@@ -163,24 +165,63 @@ fix : https://stackoverflow.com/questions/12806122/missing-python-bz2-module
 
 ## Datasets Preparation
 
-### S3DIS
-Please refer to https://github.com/yanx27/Pointnet_Pointnet2_pytorch for S3DIS preprocessing. Then modify the `data_root` entry in the .yaml configuration file.
+Labelled 3D palm oil dataset could be download from this [link](https://numcmy-my.sharepoint.com/:f:/g/personal/hcysl6_nottingham_edu_my/EnT6oLlGJFtMtWiicopHxdkBeWSrbb75L_oAZCrR_OSBvg?e=xXqNjq)
 
-### ScanNetv2
-Please refer to https://github.com/dvlab-research/PointGroup for the ScanNetv2 preprocessing. Then change the `data_root` entry in the .yaml configuration file accordingly.
+> Converting from labelled `.ply` file to `Scannetv2` format :
+
+For example we have `L15-P30_labelled.ply`
+
+1. Rename to `scene0150_30_vh_clean_2.labels.ply`
+
+2. Open `CloudCompare` ,import the file and remove label to save it separately as `scene0150_30_vh_clean_2.ply` 
+
+3. Use `Cloudcompare` to save `scene0150_30_vh_clean_2.labels.ply` into another file in `.txt` format, should be like `scene0150_30_vh_clean_2.labels.txt`
+
+4. Use [generate_agg_segs.py](fyp_util/generate_agg_segs.py) to generate 2 other files : 
+
+```bash
+python generate_agg_segs.py "scene0150_30_vh_clean_2.labels.txt"
+```
+
+Expected file output : 
+`scene0150_30.aggregation.json`, 
+`scene0150_30_vh_clean_2.0.010000.segs.json`
+
+
+### Expected files for each labelled data : 
+`{scene_id}_vh_clean_2.ply`
+`{scene_id}_vh_clean_2.labels.ply`
+`{scene_id}.aggregation.json`
+`{scene_id}_vh_clean_2.0.010000.segs.json`
+
+After that, put those data in `train/` `val/` and `test/` accordingly, dataset folder is in `PointGroup`
+
+> Generating `.pth` file for all data:
+
+Using [prepare_data_inst.py](PointGroup/dataset/scannetv2/prepare_data_inst.py)
+
+```bash
+python prepare_data_inst.py --data_split train
+```
+Expected output : `{scene_id}_isnt_nostuff.pth`
+
+Final data folder structure should look like this : 
+![alt text](figs/image.png)
+
+
+Then change the `data_root` entry in the .yaml configuration file accordingly.
+
+And now we are ready for training/validation/testing.
+
+
+### ScanNetv2 format 
+For more information , please refer to https://github.com/dvlab-research/PointGroup for more details of ScanNetv2 format data preparation instruction. 
+
+
 
 ## Training
 
-### S3DIS
-- Stratified Transformer
-```
-python3 train.py --config config/s3dis/s3dis_stratified_transformer.yaml
-```
-
-- 3DSwin Transformer (The vanilla version shown in our paper)
-```
-python3 train.py --config config/s3dis/s3dis_swin3d_transformer.yaml
-```
+Change `train_id`,`excel_folder`,`data_root` and `save_path` in config file. Then run the follosing command :
 
 ### ScanNetv2
 - Stratified Transformer
@@ -188,15 +229,20 @@ python3 train.py --config config/s3dis/s3dis_swin3d_transformer.yaml
 python3 train.py --config config/scannetv2/scannetv2_stratified_transformer.yaml
 ```
 
-- 3DSwin Transformer (The vanilla version shown in our paper)
-```
-python3 train.py --config config/scannetv2/scannetv2_swin3d_transformer.yaml
-```
 
-Note: It is normal to see the the results on S3DIS fluctuate between -0.5\% and +0.5\% mIoU maybe because the size of S3DIS is relatively small, while the results on ScanNetv2 are relatively stable.
 
 ## Testing
 For testing, first change the `model_path`, `save_folder` and `data_root_val` (if applicable) accordingly. Then, run the following command. 
+
 ```
 python3 test.py --config [YOUR_CONFIG_PATH]
 ```
+
+
+## Evaluation
+
+## Other Script 
+
+
+
+
