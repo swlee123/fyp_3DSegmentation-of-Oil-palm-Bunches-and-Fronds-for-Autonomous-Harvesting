@@ -97,7 +97,6 @@ Then run
 ```bash
 apt-cache search gcc-7
 ```
-
 Install `gcc-7`
 ```bash
 sudo apt install gcc-7
@@ -119,6 +118,8 @@ sudo update-alternatives --config gcc
 ## Dependencies Setup
 
 1. Virtual Environment 
+
+Or you can use `/stenv` directly to skip installation for virtual environment 
 
 ```bash
 python -m venv env  
@@ -149,17 +150,6 @@ fix : https://stackoverflow.com/questions/12806122/missing-python-bz2-module
 
 ` 'torch' module not found error` even `torch==1.10.0+cu113` is installed 
 fix : pip install wheel
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -221,7 +211,11 @@ For more information , please refer to https://github.com/dvlab-research/PointGr
 
 ## Training
 
-Change `train_id`,`excel_folder`,`data_root` and `save_path` in config file. Then run the follosing command :
+Change `train_id`,`excel_folder`,`data_root` and `save_path` in config file. 
+
+Edit `excel_folder` accordingly so output file will be save in /training/train_{train_id} 
+
+Then run the follosing command :
 
 ### ScanNetv2
 - Stratified Transformer
@@ -229,19 +223,73 @@ Change `train_id`,`excel_folder`,`data_root` and `save_path` in config file. The
 python3 train.py --config config/scannetv2/scannetv2_stratified_transformer.yaml
 ```
 
+Expected output : 
+
+`training_logs_{train_id}_mean.csv`
+`training_logs_{train_id}.csv`
+`validation_logs_{train_id}_mean.csv`
+`validation_logs_{train_id}.csv`
+`validation_per_class_{train_id}.csv`
+and 
+
+Model Weight saved in : 
+
+`runs/sacnnetv2_stratified_transformer/model/model_last.pth`
+
+The trained model weight , to be use for further inferencing.
 
 
 ## Testing
-For testing, first change the `model_path`, `save_folder` and `data_root_val` (if applicable) accordingly. Then, run the following command. 
+For testing, first change the `batch_size_test` `model_path`, `save_folder` and `data_root_val` (if applicable) accordingly. Then, run the following command. 
 
 ```
 python3 test.py --config [YOUR_CONFIG_PATH]
 ```
 
+Prediction output will ba saved as `{scene_id}_inst_nostuff_pred.npy` and `{scene_id}_inst_nostuff_label.npy` in [/npyfile](/npyfile) folder 
+
+> Converting .npy to .ply
+
+.npy is not directly viewable in Cloudcompare , so we need to convert it to .ply for visualization.
+
+[convert_npy_to_ply.py](fyp_util/convert_npy_to_ply.py)
+Make sure to edit `txt_file`  `pred_file` and `output_file` variables before running the following command:
+
+```bash
+python convert_npy_to_ply.py
+```
+
+Expected output : .ply file with prediction results
+
+Then , we can inport the .ply file in CloudCompare for prediction visualization.
 
 ## Evaluation
 
-## Other Script 
+Several scripts is provided in `training/` to do visualizations and analysis on training logs.
+
+`average_loss_all.py`
+
+This script loads training and validation logs from multiple train_X folders (e.g., from LOOCV runs), averages the loss and accuracy across all folds, and plots them over epochs.
+
+`average_validation_per_class.py`
+This script aggregates and visualizes class-wise IoU and accuracy metrics across multiple train_X folds using validation_per_class_X.csv files. To use it, ensure each fold directory contains a validation_per_class_X.csv file
+
+`compare_per_class_validation.py`
+This script visualizes per-class IoU and accuracy across epochs from a single training fold’s validation_per_class_X.csv. To use it, update the file path to the desired fold and run the script to generate class-wise performance plots.
+
+`compare_train_val.py`
+This script compares training and validation performance by plotting mean IoU and mean accuracy over epochs using training_logs_X_mean.csv and validation_logs_X_mean.csv. Update the file paths to match the desired training fold directory before running.
+
+`plot_miou_macc.py`
+This script automates the aggregation and visualization of training and validation performance metrics (mIoU and mAcc) across multiple training folds (e.g., train_1, train_2, ...).Per-fold validation mIoU and mAcc values into separate CSV files (total_val_iou.csv and total_val_acc.csv).
+
+
+`train_val_loss.py`
+This script visualizes the training and validation loss and accuracy metrics across epochs from deep learning logs. It processes log files (training_logs_X.csv and validation_logs_X.csv) located in directories like train_1, train_2, etc.
+
+`training_visualizer.py` 
+This script visualizes training metrics over time from a single log file (train_6/training_logs_6.csv), plotting loss,accuracy and average loss.
+
 
 
 

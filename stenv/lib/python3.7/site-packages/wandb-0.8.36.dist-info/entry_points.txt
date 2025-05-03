@@ -1,0 +1,6 @@
+[console_scripts]
+wanbd = wandb.cli:cli
+wandb = wandb.cli:cli
+wandb-docker-run = wandb.cli:docker_run
+wb = wandb.cli:cli
+

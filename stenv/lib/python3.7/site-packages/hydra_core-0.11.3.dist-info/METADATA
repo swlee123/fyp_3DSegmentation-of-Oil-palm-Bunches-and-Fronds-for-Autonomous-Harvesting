@@ -1,0 +1,51 @@
+Metadata-Version: 2.1
+Name: hydra-core
+Version: 0.11.3
+Summary: A framework for elegantly configuring complex applications
+Home-page: https://github.com/facebookresearch/hydra
+Author: Omry Yadan
+Author-email: omry@fb.com
+License: UNKNOWN
+Keywords: command-line configuration yaml tab-completion
+Platform: UNKNOWN
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Development Status :: 4 - Beta
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Operating System :: POSIX :: Linux
+Classifier: Operating System :: MacOS
+Classifier: Operating System :: Microsoft :: Windows
+Description-Content-Type: text/markdown
+Requires-Dist: omegaconf (<1.5,>=1.4)
+Requires-Dist: pathlib2 (>=2.2.0) ; python_version < "3.0"
+Provides-Extra: dev
+Requires-Dist: black ; extra == 'dev'
+Requires-Dist: coverage ; extra == 'dev'
+Requires-Dist: flake8 ; extra == 'dev'
+Requires-Dist: flake8-copyright ; extra == 'dev'
+Requires-Dist: nox ; extra == 'dev'
+Requires-Dist: pre-commit ; extra == 'dev'
+Requires-Dist: pytest ; extra == 'dev'
+Requires-Dist: setuptools ; extra == 'dev'
+Requires-Dist: towncrier ; extra == 'dev'
+Requires-Dist: twine ; extra == 'dev'
+
+[![PyPI](https://img.shields.io/pypi/v/hydra-core)](https://pypi.org/project/hydra-core/)
+[![CircleCI](https://img.shields.io/circleci/build/github/facebookresearch/hydra?token=af199cd2deca9e70e53776f9ded96284b10687e9)](https://circleci.com/gh/facebookresearch/hydra)
+![PyPI - License](https://img.shields.io/pypi/l/hydra-core)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/hydra-core)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/hydra-core.svg)](https://pypistats.org/packages/hydra-core)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://hydra-framework.zulipchat.com)
+
+
+# Hydra
+A framework for elegantly configuring complex applications.
+
+Check the [website](https://hydra.cc/) for more information.
+
+## License
+Hydra is licensed under [MIT License](LICENSE).
+
+

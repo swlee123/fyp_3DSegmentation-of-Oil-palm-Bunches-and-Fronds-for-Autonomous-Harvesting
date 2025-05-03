@@ -1,0 +1,3 @@
+#!/home/swlee/stenv/bin/python3
+from numba.pycc import main
+main()
