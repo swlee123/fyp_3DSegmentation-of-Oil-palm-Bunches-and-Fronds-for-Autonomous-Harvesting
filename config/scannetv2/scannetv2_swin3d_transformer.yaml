@@ -1,6 +1,6 @@
 DATA:
   data_name: scannetv2
-  data_root: # Fill in the pre-processed data path (which contains the 'train', 'val', 'test' directories)
+  data_root:  /home/swlee/scannetdata/PointGroup/dataset/scannetv2/PointGroup/dataset/scannetv2
   classes: 20
   fea_dim: 6
   voxel_size: 0.02 

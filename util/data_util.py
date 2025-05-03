@@ -142,6 +142,7 @@ def data_prepare(coord, feat, label, split='train', voxel_size=0.04, voxel_max=N
     coord = torch.FloatTensor(coord)
     feat = torch.FloatTensor(feat) / 255.
     label = torch.LongTensor(label)
+    
     return coord, feat, label
 
 

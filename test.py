@@ -23,6 +23,13 @@ random.seed(123)
 np.random.seed(123)
 
 
+
+# build pipeline to convert labelled .ply to required format faster 
+
+# build automated and faster visualization
+
+# task : record down the metrics and save as csv
+
 def get_parser():
     parser = argparse.ArgumentParser(description='PyTorch Point Cloud Classification / Semantic Segmentation')
     parser.add_argument('--config', type=str, default='config/s3dis/s3dis_pointweb.yaml', help='config file')
@@ -58,6 +65,7 @@ def main():
     # get model
     if args.arch == 'stratified_transformer':
         
+        print("Creating ST")
         from model.stratified_transformer import Stratified
 
         args.patch_size = args.grid_size * args.patch_size
@@ -70,6 +78,7 @@ def main():
             rel_key=args.rel_key, rel_value=args.rel_value, drop_path_rate=args.drop_path_rate, concat_xyz=args.concat_xyz, num_classes=args.classes, \
             ratio=args.ratio, k=args.k, prev_grid_size=args.grid_size, sigma=1.0, num_layers=args.num_layers, stem_transformer=args.stem_transformer)
 
+        print("Done St")
     elif args.arch == 'swin3d_transformer':
         
         from model.swin3d_transformer import Swin
@@ -114,33 +123,33 @@ def main():
     test_transform_set.append(None) # for None aug
     test_transform_set.append(None) # for permutate
 
-    # aug 90
-    logger.info("augmentation roate")
-    logger.info("rotate_angle: {}".format(90))
-    test_transform = transform.RandomRotate(rotate_angle=90, along_z=args.get('rotate_along_z', True))
-    test_transform_set.append(test_transform)
+    # # aug 90
+    # logger.info("augmentation roate")
+    # logger.info("rotate_angle: {}".format(90))
+    # test_transform = transform.RandomRotate(rotate_angle=90, along_z=args.get('rotate_along_z', True))
+    # test_transform_set.append(test_transform)
     
-    # aug 180
-    logger.info("augmentation roate")
-    logger.info("rotate_angle: {}".format(180))
-    test_transform = transform.RandomRotate(rotate_angle=180, along_z=args.get('rotate_along_z', True))
-    test_transform_set.append(test_transform)
+    # # aug 180
+    # logger.info("augmentation roate")
+    # logger.info("rotate_angle: {}".format(180))
+    # test_transform = transform.RandomRotate(rotate_angle=180, along_z=args.get('rotate_along_z', True))
+    # test_transform_set.append(test_transform)
     
-    # aug 270
-    logger.info("augmentation roate")
-    logger.info("rotate_angle: {}".format(270))
-    test_transform = transform.RandomRotate(rotate_angle=270, along_z=args.get('rotate_along_z', True))
-    test_transform_set.append(test_transform)
+    # # aug 270
+    # logger.info("augmentation roate")
+    # logger.info("rotate_angle: {}".format(270))
+    # test_transform = transform.RandomRotate(rotate_angle=270, along_z=args.get('rotate_along_z', True))
+    # test_transform_set.append(test_transform)
     
     if args.data_name == 's3dis':
-        
-        # shift +0.2
-        test_transform = transform.RandomShift_test(shift_range=0.2)
-        test_transform_set.append(test_transform)
+        print("In s3dis transform")
+        # # shift +0.2
+        # test_transform = transform.RandomShift_test(shift_range=0.2)
+        # test_transform_set.append(test_transform)
 
-        # shift -0.2
-        test_transform = transform.RandomShift_test(shift_range=-0.2)
-        test_transform_set.append(test_transform)
+        # # shift -0.2
+        # test_transform = transform.RandomShift_test(shift_range=-0.2)
+        # test_transform_set.append(test_transform)
 
     test(model, criterion, names, test_transform_set)
 
@@ -202,7 +211,8 @@ def test(model, criterion, names, test_transform_set):
     intersection_meter = AverageMeter()
     union_meter = AverageMeter()
     target_meter = AverageMeter()
-    args.batch_size_test = 5 
+    args.batch_size_test = 1
+    # change from 5 to 1
     # args.voxel_max = None
     model.eval()
 
@@ -316,7 +326,11 @@ def test(model, criterion, names, test_transform_set):
     accuracy_class = intersection_meter.sum / (target_meter.sum + 1e-10)
     mIoU1 = np.mean(iou_class)
     mAcc1 = np.mean(accuracy_class)
-    allAcc1 = sum(intersection_meter.sum) / (sum(target_meter.sum) + 1e-10)
+    
+    
+    # allAcc1 = sum(intersection_meter.sum) / (sum(target_meter.sum) + 1e-10)
+
+    allAcc1 = intersection_meter.sum / (target_meter.sum + 1e-10)
 
     # calculation 2
     intersection, union, target = intersectionAndUnion(np.concatenate(pred_save), np.concatenate(label_save), args.classes, args.ignore_label)
@@ -325,8 +339,10 @@ def test(model, criterion, names, test_transform_set):
     mIoU = np.mean(iou_class)
     mAcc = np.mean(accuracy_class)
     allAcc = sum(intersection) / (sum(target) + 1e-10)
+    
+    
     logger.info('Val result: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(mIoU, mAcc, allAcc))
-    logger.info('Val1 result: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(mIoU1, mAcc1, allAcc1))
+    # logger.info('Val1 result: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(mIoU1, mAcc1, allAcc1))
 
     for i in range(args.classes):
         logger.info('Class_{} Result: iou/accuracy {:.4f}/{:.4f}, name: {}.'.format(i, iou_class[i], accuracy_class[i], names[i]))

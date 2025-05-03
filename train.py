@@ -5,6 +5,14 @@ import numpy as np
 import logging
 import argparse
 import shutil
+import pandas as pd
+import matplotlib.pyplot as plt 
+import requests
+from dotenv import load_dotenv
+import shutil
+from collections import defaultdict
+import re
+
 
 import torch
 import torch.backends.cudnn as cudnn
@@ -28,6 +36,52 @@ from util.logger import get_logger
 from functools import partial
 from util.lr import MultiStepWithWarmup, PolyLR, PolyLRwithWarmup
 import torch_points_kernels as tp
+
+
+# task night 26/3 : 
+
+# Modify the code so that it records down the following metrics into following file ✅ 
+# 1. mean Iou mean Acc across each validation  , if paramEpoch = 10, then will be 10 rows 
+# 2. Iou and Acc across each each validation , if paramEpoch = 10 ,and val data = 4, then  will be 40 rows  ✅ 
+# 3. mean Iou mean Acc across each training , if paramEpoch = 10 , then will have 10 rows ✅ 
+# 4. Iou and Acc across each each training , if paramEpoch = 10 ,and training data = 10, will be large number like 2940..✅ 
+# 5. Iou and Acc for each class (0-3) across each validation , , if paramEpoch = 10, will have 10 rows✅ 
+ 
+# Ouput File Name :
+# 1. validation_logs_5_mean.csv ✅ 
+# 2. validation_logs_5.csv  ✅ 
+# 3. training_logs_5_mean.csv ✅ 
+# 4. training_logs_5.csv  ✅ 
+# 5. validation_per_class.csv✅ 
+
+
+load_dotenv()
+
+telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
+
+
+train_loss = []
+train_avg_loss = []
+val_loss = []
+val_avg_loss = []
+train_acc = []
+val_acc = []
+epochs_count = []
+
+train_mIou = []
+train_mAcc = []
+train_allAcc = []
+train_Iou = []
+
+
+val_mIou = []
+val_mAcc = []
+val_Iou = []
+
+class_val_iou = []
+class_val_acc = []
+
 
 def get_parser():
     parser = argparse.ArgumentParser(description='PyTorch Point Cloud Semantic Segmentation')
@@ -70,7 +124,9 @@ def main():
         args.world_size = int(os.environ["WORLD_SIZE"])
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
     args.ngpus_per_node = len(args.train_gpu)
+    print("Len of train gpu :",args.train_gpu)
     if len(args.train_gpu) == 1:
+
         args.sync_bn = False
         args.distributed = False
         args.multiprocessing_distributed = False
@@ -81,6 +137,7 @@ def main():
         args.world_size = args.ngpus_per_node * args.world_size
         mp.spawn(main_worker, nprocs=args.ngpus_per_node, args=(args.ngpus_per_node, args))
     else:
+        print("main worker !")
         main_worker(args.train_gpu, args.ngpus_per_node, args)
 
 
@@ -174,11 +231,40 @@ def main_worker(gpu, ngpus_per_node, argss):
             if main_process():
                 logger.info("=> loading weight '{}'".format(args.weight))
             checkpoint = torch.load(args.weight)
-            model.load_state_dict(checkpoint['state_dict'])
+            
+            # Filter out classifier weights and other mismatched layers
+            model_dict = model.state_dict()
+            pretrained_dict = {}
+            for k, v in checkpoint['state_dict'].items():
+                # Skip classifier layer
+                if 'classifier.3' in k:
+                    if main_process():
+                        logger.info(f"Skipping {k} due to classifier mismatch")
+                    continue
+                    
+                # Skip items that don't exist in current model
+                if k not in model_dict:
+                    if main_process():
+                        logger.info(f"Skipping {k} as it doesn't exist in current model")
+                    continue
+                    
+                # Skip items with size mismatch
+                if v.size() != model_dict[k].size():
+                    if main_process():
+                        logger.info(f"Skipping {k} due to size mismatch: {v.size()} vs {model_dict[k].size()}")
+                    continue
+                    
+                # Add matched items
+                pretrained_dict[k] = v
+                
+            # Update model with filtered weights
+            model_dict.update(pretrained_dict)
+            model.load_state_dict(model_dict, strict=False)
+            
             if main_process():
-                logger.info("=> loaded weight '{}'".format(args.weight))
-        else:
-            logger.info("=> no weight found at '{}'".format(args.weight))
+                logger.info(f"=> loaded {len(pretrained_dict)}/{len(model_dict)} layers from weight '{args.weight}'")
+    else:
+        logger.info("=> no weight found at '{}'".format(args.weight))
 
     if args.resume:
         if os.path.isfile(args.resume):
@@ -236,6 +322,7 @@ def main_worker(gpu, ngpus_per_node, argss):
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_data)
     else:
         train_sampler = None
+        
     train_loader = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, shuffle=(train_sampler is None), num_workers=args.workers, \
         pin_memory=True, sampler=train_sampler, drop_last=True, collate_fn=partial(collate_fn_limit, max_batch_points=args.max_batch_points, logger=logger if main_process() else None))
 
@@ -251,6 +338,7 @@ def main_worker(gpu, ngpus_per_node, argss):
         val_sampler = torch.utils.data.distributed.DistributedSampler(val_data)
     else:
         val_sampler = None
+
     val_loader = torch.utils.data.DataLoader(val_data, batch_size=args.batch_size_val, shuffle=False, num_workers=args.workers, \
             pin_memory=True, sampler=val_sampler, collate_fn=collate_fn)
     
@@ -297,6 +385,8 @@ def main_worker(gpu, ngpus_per_node, argss):
         scaler = None
     
     for epoch in range(args.start_epoch, args.epochs):
+   
+        
         if args.distributed:
             train_sampler.set_epoch(epoch)
 
@@ -352,6 +442,7 @@ def train(train_loader, model, criterion, optimizer, epoch, scaler, scheduler):
     end = time.time()
     max_iter = args.epochs * len(train_loader)
     for i, (coord, feat, target, offset) in enumerate(train_loader):  # (n, 3), (n, c), (n), (b)
+        
         data_time.update(time.time() - end)
 
         offset_ = offset.clone()
@@ -436,6 +527,11 @@ def train(train_loader, model, criterion, optimizer, epoch, scaler, scheduler):
                                                           loss_meter=loss_meter,
                                                           lr=lr,
                                                           accuracy=accuracy))
+            train_loss.append(loss_meter.val)
+            train_acc.append(accuracy)
+            train_avg_loss.append(loss_meter.avg)
+            epochs_count.append(epoch+1)
+            
         if main_process():
             writer.add_scalar('loss_train_batch', loss_meter.val, current_iter)
             writer.add_scalar('mIoU_train_batch', np.mean(intersection / (union + 1e-10)), current_iter)
@@ -446,8 +542,21 @@ def train(train_loader, model, criterion, optimizer, epoch, scaler, scheduler):
     accuracy_class = intersection_meter.sum / (target_meter.sum + 1e-10)
     mIoU = np.mean(iou_class)
     mAcc = np.mean(accuracy_class)
-    allAcc = sum(intersection_meter.sum) / (sum(target_meter.sum) + 1e-10)
+    
+    # debugging
+    print(f"intersection_meter.sum: {intersection_meter.sum}, type: {type(intersection_meter.sum)}")
+    print(f"target_meter.sum: {target_meter.sum}, type: {type(target_meter.sum)}")
+
+
+    # allAcc = sum(intersection_meter.sum) / (sum(target_meter.sum) + 1e-10)
+    # sw part
+    allAcc = intersection_meter.sum / (target_meter.sum + 1e-10) if isinstance(intersection_meter.sum, (int, float)) else sum(intersection_meter.sum) / (sum(target_meter.sum) + 1e-10)
+    
     if main_process():
+        train_mAcc.append(mAcc)
+        train_mIou.append(mIoU)
+        train_allAcc.append(allAcc)
+        
         logger.info('Train result at epoch [{}/{}]: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(epoch+1, args.epochs, mIoU, mAcc, allAcc))
     return loss_meter.avg, mIoU, mAcc, allAcc
 
@@ -493,6 +602,10 @@ def validate(val_loader, model, criterion):
             loss = criterion(output, target)
 
         output = output.max(1)[1]
+        
+        print("Unique Target Classes:", np.unique(target.cpu().numpy()))  # 👈 Add this
+
+
         n = coord.size(0)
         if args.multiprocessing_distributed:
             loss *= n
@@ -521,22 +634,238 @@ def validate(val_loader, model, criterion):
                                                           batch_time=batch_time,
                                                           loss_meter=loss_meter,
                                                           accuracy=accuracy))
+            
+            val_loss.append(loss_meter.val)
+            val_acc.append(accuracy)
+            val_avg_loss.append(loss_meter.avg)
+            
+            
+    print("In validation : ")
+    print(f"Intersection Meter - Sum: {intersection_meter.sum}, Count: {intersection_meter.count}, Avg: {intersection_meter.avg}")
+    print(f"Target Meter - Sum: {target_meter.sum}, Count: {target_meter.count}, Avg: {target_meter.avg}")
 
+    
     iou_class = intersection_meter.sum / (union_meter.sum + 1e-10)
     accuracy_class = intersection_meter.sum / (target_meter.sum + 1e-10)
     mIoU = np.mean(iou_class)
     mAcc = np.mean(accuracy_class)
-    allAcc = sum(intersection_meter.sum) / (sum(target_meter.sum) + 1e-10)
+    allAcc = np.nan_to_num(intersection_meter.sum / (target_meter.sum + 1e-10), nan=0.0).mean()
+
     if main_process():
         logger.info('Val result: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(mIoU, mAcc, allAcc))
+        
+        val_mIou.append(mIoU)
+        val_mAcc.append(mAcc)
+        class_val_iou.append(iou_class)
+        class_val_acc.append(accuracy_class)
+                
+        
         for i in range(args.classes):
             logger.info('Class_{} Result: iou/accuracy {:.4f}/{:.4f}.'.format(i, iou_class[i], accuracy_class[i]))
+            
+
+
         logger.info('<<<<<<<<<<<<<<<<< End Evaluation <<<<<<<<<<<<<<<<<')
     
     return loss_meter.avg, mIoU, mAcc, allAcc
+
+
+def sendTelegramNotification(msg):
+    """
+    Sends a message to your Telegram account.
+    """
+    url = f"https://api.telegram.org/bot{telegram_bot_token}/sendMessage"
+    payload = {
+        "chat_id": telegram_chat_id,
+        "text": msg
+    }
+    try:
+        response = requests.post(url, json=payload)
+        return response.json()
+    except Exception as e:
+        logger.error(f"Failed to send message to Telegram: {e}")
+        return None
+
+
+def get_ss_scene_prefixes(folder):
+    files = [f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
+    scene_groups = defaultdict(list)
+
+    for f in files:
+        if f.startswith("scene"):
+            match = re.match(r"(scene\d+_\d+)",f)
+            if match:
+                prefix = match.group(1)
+                scene_groups[prefix].append(f)
+            else:
+                print(f"Warning: No match for file {f}")
+
+    return scene_groups
+
+def get_ori_scene_prefixes(ss_list):
+
+    original_list = set()
+    for f in ss_list:
+        if f.startswith("scene"): # all looks like scene0152_15 , wan to look at last 2 number 
+            prefix = f.split("_")[1]  # e.g. scene0151_03
+            name = f[:-4]
+            ori_name = name+prefix
+            original_list.add(ori_name)
+    
+    return list(original_list)
+
+
+
+def get_scene_prefixes(folder):
+    files = [f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
+    scene_groups = defaultdict(list)
+    for f in files:
+        if f.startswith("scene"):
+            match = re.match(r"(scene\d+_\d+)", f)
+            if match:
+                prefix = match.group(1)
+                scene_groups[prefix].append(f)
+    return scene_groups
+
+# forgive me i had to hardcode this
+TRAIN_DIR = '/home/swlee/scannetdata/PointGroup/dataset/scannetv2/PointGroup/dataset/scannetv2/train'
+VAL_DIR = '/home/swlee/scannetdata/PointGroup/dataset/scannetv2/PointGroup/dataset/scannetv2/val'
+# line of hardcoded
+
+def reset_folders():
+    
+
+
+    """Move all scene files from val/ back to train/."""
+    val_scenes = get_scene_prefixes(VAL_DIR)
+    for prefix, files in val_scenes.items():
+        for f in files:
+            shutil.move(os.path.join(VAL_DIR, f), os.path.join(TRAIN_DIR, f))
+
+def apply_loocv(fold_idx, scene_prefixes):
+  
+    reset_folders()
+    val_scene = scene_prefixes[fold_idx]
+    print(f"[Fold {fold_idx + 1}] Moving scene '{val_scene}' to val set...")
+    
+    all_val_scene = []
+    
+    for i in range(5):
+        
+        scene = val_scene[:8] + str(i) + val_scene[9:]
+        all_val_scene.append(scene)
+    
+    print(f"all_val_scene = {all_val_scene}")
+    
+    # Move this scene to val
+    for val_scene in all_val_scene:
+        for f in os.listdir(TRAIN_DIR):
+            if f.startswith(val_scene):
+                print(f"Moving {f} to val set")
+                shutil.move(os.path.join(TRAIN_DIR, f), os.path.join(VAL_DIR, f))
+
+    print(f"[Fold {fold_idx + 1}] Val scene = {val_scene}, remaining in train = {len(scene_prefixes) - 1}\n")
+    
+    for val_scene in all_val_scene:
+        for f in os.listdir(VAL_DIR):
+            if f.startswith(val_scene):
+                print(f"Val set contains: {f}")
+    
+    input(f"Fold {fold_idx+1} Press Enter to continue...")
+
+    
+    
+def save_results():
+    # save and visualize training loss/acc/epoch ..
+
+    
+    # 1st
+    df_train = pd.DataFrame({
+         "Epochs" : epochs_count,
+         "Training Loss": train_loss,
+         "Training Accuracy": train_acc,
+         "Training Avg Loss (so far)" : train_avg_loss
+
+         
+    })
+    
+    print(len(train_mIou),len(train_mAcc))
+    df_train_mean = pd.DataFrame({
+        #  "Epochs" : epochs_count,
+         "mIou": train_mIou,
+         "mAcc": train_mAcc,
+         "allAcc" : train_allAcc
+
+    })
+    
+    df_val = pd.DataFrame({
+        "Validation Loss": val_loss,
+        "Validation Accuracy":val_acc,
+        "Validation Avg Loss" : val_avg_loss
+    })
+    
+    df_val_mean = pd.DataFrame({
+        
+        #  "Epochs" : epochs_count,
+         "mIou": val_mIou,
+         "mAcc": val_mAcc,
+        
+    })
+    
+    df_class_val = pd.DataFrame({
+        # "Epochs": epochs_count,
+        "Class 0 Iou" : [i[0] for i in class_val_iou],
+        "Class 0 Acc" :  [i[0] for i in class_val_acc],
+        "Class 1 Iou" : [i[1] for i in class_val_iou],
+        "Class 1 Acc" : [i[1] for i in class_val_acc],
+        "Class 2 Iou" :[i[2] for i in class_val_iou] ,
+        "Class 2 Acc": [i[2] for i in class_val_acc],
+        "Class 3 Iou" : [i[3] for i in class_val_iou],
+        "Class 3 Acc":[i[3] for i in class_val_acc]
+    })
+    
+    
+    training_logs = f"training_logs_{args.train_id}.csv" 
+    training_mean_logs = f"training_logs_{args.train_id}_mean.csv"
+    
+    val_logs = f"validation_logs_{args.train_id}.csv"
+    val_mean_logs = f"validation_logs_{args.train_id}_mean.csv"
+    
+    class_val_logs = f"validation_per_class_{args.train_id}.csv"
+    
+    
+    # Define full file paths
+    training_file_path = os.path.join(args.excel_folder, training_logs)
+    training_mean_file_path = os.path.join(args.excel_folder, training_mean_logs)
+
+    val_file_path = os.path.join(args.excel_folder, val_logs)
+    val_mean_file_path = os.path.join(args.excel_folder, val_mean_logs)
+
+    class_val_file_path = os.path.join(args.excel_folder, class_val_logs)
+
+    # Save DataFrames to CSV files
+    df_train.to_csv(training_file_path, index=False)
+    print(f"✅ Training records saved to {training_file_path}")
+
+    df_train_mean.to_csv(training_mean_file_path, index=False)
+    print(f"✅ Training mean metrics saved to {training_mean_file_path}")
+
+    df_val.to_csv(val_file_path, index=False)
+    print(f"✅ Validation records saved to {val_file_path}")
+
+    df_val_mean.to_csv(val_mean_file_path, index=False)
+    print(f"✅ Validation mean metrics saved to {val_mean_file_path}")
+
+    df_class_val.to_csv(class_val_file_path, index=False)
+    print(f"✅ Validation per class saved to {class_val_file_path}")
+    
+    sendTelegramNotification(f"✅ Training Done , Result saved Successfully into {args.excel_folder}")
+    
 
 
 if __name__ == '__main__':
     import gc
     gc.collect()
     main()
+    save_results()
+    

@@ -1,9 +1,9 @@
 DATA:
   data_name: scannetv2
-  data_root: # Fill in the pre-processed data path (which contains the 'train', 'val', 'test' directories)
-  classes: 20
+  data_root: /home/swlee/scannetdata/PointGroup/dataset/scannetv2/PointGroup/dataset/scannetv2
+  classes: 4
   fea_dim: 6
-  voxel_size: 0.02 
+  voxel_size: 0.05 # 0.02 default
   voxel_max: 120000 
   loop: 6 
 
@@ -20,7 +20,7 @@ TRAIN:
   downsample_scale: 4 
   num_layers: 5 
   patch_size: 1 
-  window_size: 5 
+  window_size: 3 # default 5
   depths: [3,3,9,3,3] 
   channels: [48, 96, 192, 384, 384] 
   num_heads: [3, 6, 12, 24, 24]
@@ -29,11 +29,12 @@ TRAIN:
   concat_xyz: True
   grid_size: 0.02
   max_batch_points: 250000
-  max_num_neighbors: 34 # For KPConv
+  max_num_neighbors: 34 # For KPConv+
   ratio: 0.25
   k: 16
 
   # training
+  train_id : 16 # testing id for excel log naming 
   aug: True
   transformer_lr_scale: 0.1 
   scheduler_update: step 
@@ -43,14 +44,14 @@ TRAIN:
   warmup_ratio: 0.000001
   use_amp: True
   optimizer: AdamW #SGD
-  train_gpu: [0, 1, 2, 3] 
-  workers: 16  # data loader workers
-  batch_size: 8 # batch size for training
-  batch_size_val: 4 # batch size for validation during training, memory and speed tradeoff
+  train_gpu: [0]
+  workers: 1  # data loader workers
+  batch_size: 1 # batch size for training default 6
+  batch_size_val: 1 # batch size for validation during training, memory and speed tradeoff
   base_lr: 0.006
-  epochs: 100
+  epochs: 5
   start_epoch: 0
-  step_epoch: 30
+  step_epoch: 10
   multiplier: 0.1
   momentum: 0.9
   weight_decay: 0.05
@@ -61,23 +62,24 @@ TRAIN:
   print_freq: 1
   save_freq: 1
   save_path: runs/sacnnetv2_stratified_transformer
-  weight:  # path to initial weight (default: none)
+  excel_folder: /home/swlee/Stratified-Transformer/training  # folder to save excel training files
+  weight:  # runs/sacnnetv2_stratified_transformer/model/model_last.pth # last epoch weight
   resume:  # path to latest checkpoint (default: none)
   evaluate: True  # evaluate on validation set, extra gpu memory needed and small batch_size_val is recommend
   eval_freq: 1
 Distributed:
   dist_url: tcp://127.0.0.1:6789
   dist_backend: 'nccl'
-  multiprocessing_distributed: True
+  multiprocessing_distributed: False 
   world_size: 1
   rank: 0
 
 TEST:
-  data_root_val: # Fill the path that contains the scenes of the validation set (e.g., "[YOUR PATH]/val")
-  split: val  # split in [train, val and test]
+  data_root_val: /home/swlee/scannetdata/PointGroup/dataset/scannetv2/PointGroup/dataset/scannetv2/test
+  split: test  # split in [train, val and test]
   test_gpu: [0]
-  test_workers: 4
-  batch_size_test: 4
-  model_path: # Fill the path of the trained .pth file model
-  save_folder: # Fill the path to store the .npy files for each scene
-  names_path: data/scannet/scannet_names.txt
+  test_workers: 1
+  batch_size_test: 1
+  model_path:  /home/swlee/Stratified-Transformer/training/train_10/model_last.pth
+  save_folder: /home/swlee/Stratified-Transformer/npyfile/ # Fill the path to store the .npy files for each scene
+  names_path: /home/swlee/scannetdata/PointGroup/dataset/scannetv2/PointGroup/data/scannet_names.txt
