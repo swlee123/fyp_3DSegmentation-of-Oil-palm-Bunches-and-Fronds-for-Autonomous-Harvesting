@@ -14,6 +14,11 @@ Official Github Implementation of Stratified Transformer : [**Stratified Transfo
 
 # Get Started
 
+Clone Repository 
+
+```bash
+git clone https://github.com/swlee123/fyp_3DSegmentation-of-Oil-palm-Bunches-and-Fronds-for-Autonomous-Harvesting.git
+```
 ## Environment Setup 
 
 The setup in official github lack of certain information and detail instructions.
